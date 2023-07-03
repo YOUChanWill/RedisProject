@@ -2,6 +2,8 @@ package you.chanwill.service;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private RedissonClient redissonClient;
+
     // 优惠卷秒杀功能实现
     @Override
     public Result seckillVoucher(Long voucherId) {
@@ -49,9 +54,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
         Long UserId = UserHolder.getUser().getId();
 
-        SimpleRedisLock lock = new SimpleRedisLock("order:" + UserId, stringRedisTemplate);
+//        SimpleRedisLock lock = new SimpleRedisLock("order:" + UserId, stringRedisTemplate);
+        // 使用redisson获取锁
+        RLock lock = redissonClient.getLock("lock:order" + UserId);
+
         // 获取锁
-        boolean isLock = lock.tryLock(1200);
+        boolean isLock = lock.tryLock();
         if (!isLock){
             // 获取锁失败
             return Result.fail("禁止重复下单");
