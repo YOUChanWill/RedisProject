@@ -54,12 +54,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
         Long UserId = UserHolder.getUser().getId();
 
-//        SimpleRedisLock lock = new SimpleRedisLock("order:" + UserId, stringRedisTemplate);
-        // 使用redisson获取锁
-        RLock lock = redissonClient.getLock("lock:order" + UserId);
+        SimpleRedisLock lock = new SimpleRedisLock("order:" + UserId, stringRedisTemplate);
+
 
         // 获取锁
-        boolean isLock = lock.tryLock();
+        boolean isLock = lock.tryLock(1400);
         if (!isLock){
             // 获取锁失败
             return Result.fail("禁止重复下单");
@@ -80,6 +79,16 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         // 实现一人一单
         Long UserId = UserHolder.getUser().getId();
 
+        // 使用redisson获取锁
+        RLock lock = redissonClient.getLock("lock:order" + UserId);
+        // 获取锁
+        boolean isLock = lock.tryLock();
+        if (!isLock){
+            // 获取锁失败
+            return Result.fail("禁止重复下单");
+        }
+
+        try {
             Integer count = query().eq("user_id", UserId).eq("voucher_id", voucherId).count();
             if (count > 0) {
                 return Result.fail("已经购买过了");
@@ -105,6 +114,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             voucherOrder.setVoucherId(voucherId);
             save(voucherOrder);
             return Result.ok(orderId);
+
+        } finally {
+            // 释放锁
+            lock.unlock();
+        }
     }
 }
 
